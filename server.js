@@ -339,17 +339,21 @@ app.post('/api/plati/verify', async (req, res) => {
       }
     );
 
-    const purchase = digiRes.data;
+    const data = digiRes.data;
 
     // Digiseller returns { retval: 0 } on success (0 = OK)
-    if (purchase.retval !== 0) {
+    if (data.retval !== 0) {
       return res.status(400).json({
-        error: `Invalid purchase code. Digiseller response: ${purchase.retdesc || 'Unknown error'}`,
+        error: `Invalid purchase code. Digiseller response: ${data.retdesc || 'Unknown error'}`,
       });
     }
 
-    const invoiceId   = String(purchase.inv   || purchase.invoice_id || '');
-    const productName = purchase.product_name  || purchase.name       || 'PlatiMarket Product';
+    const invoiceId   = String(data.inv || data.invoice_id || '');
+    const productName = "PlatiMarket Order";
+    const email       = data.email || 'N/A';
+    const amount      = data.amount || '0.00';
+    const type_curr   = data.type_curr || 'USD';
+    const offerDetails = data.options && data.options.length > 0 ? data.options[0].name + ': ' + data.options[0].value : 'Default';
 
     // ── 3. Check Supabase for existing record ────────────────────────────
     const { data: existing, error: dbErr } = await supabase
@@ -369,10 +373,12 @@ app.post('/api/plati/verify', async (req, res) => {
       }
       // Code exists but is pending/processing/failed — allow re-verification
       return res.status(200).json({
-        success:      true,
-        product_name: productName,
-        invoice_id:   invoiceId,
-        note:         'Order already registered — you may proceed to activate.',
+        success: true,
+        product: "PlatiMarket Order",
+        invoice_id: invoiceId,
+        email: email,
+        price: `${amount} ${type_curr}`,
+        offer: offerDetails
       });
     }
 
@@ -392,9 +398,12 @@ app.post('/api/plati/verify', async (req, res) => {
     log('INFO', `Verified & registered: ${code} → ${productName}`);
 
     return res.status(200).json({
-      success:      true,
-      product_name: productName,
-      invoice_id:   invoiceId,
+      success: true,
+      product: "PlatiMarket Order",
+      invoice_id: invoiceId,
+      email: email,
+      price: `${amount} ${type_curr}`,
+      offer: offerDetails
     });
 
   } catch (err) {
@@ -549,9 +558,7 @@ app.get('/health', (_req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // 404 catch-all
 // ─────────────────────────────────────────────────────────────────────────────
-app.use((_req, res) => {
-  res.status(404).json({ error: 'Route not found.' });
-});
+app.use((req, res) => res.status(404).json({ error: `Backend Route NOT FOUND: ${req.method} ${req.url}` }));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Start server — MUST bind 0.0.0.0 for Railway's reverse proxy to reach it
