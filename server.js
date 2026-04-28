@@ -41,6 +41,9 @@ require('dotenv').config();
 
 // ─── App & Supabase initialization ───────────────────────────────────────────
 const app = express();
+app.use(cors({ origin: '*' }));
+
+app.get('/api/ping', (req, res) => res.json({ status: 'Backend is alive' }));
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -49,12 +52,7 @@ const supabase = createClient(
 );
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
-app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',   // Lock down in production
-  methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -555,10 +553,62 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ ok: true, service: 'platimarket-activation', ts: new Date().toISOString() });
 });
 
+// ═════════════════════════════════════════════════════════════════════════════
+//  ENDPOINT 4: POST /api/check-auth
+//  Validates a ChatGPT Auth Session JSON by decoding JWT payload locally
+// ═════════════════════════════════════════════════════════════════════════════
+app.post('/api/check-auth', (req, res) => {
+  try {
+    const { authJson } = req.body;
+    if (!authJson) return res.json({ valid: false, message: 'No JSON provided' });
+
+    let parsed;
+    try { 
+      parsed = typeof authJson === 'string' ? JSON.parse(authJson) : authJson; 
+    } catch(e) { 
+      return res.json({ valid: false, message: 'Invalid JSON format' }); 
+    }
+
+    const token = parsed.accessToken;
+    if (!token) return res.json({ valid: false, message: 'Missing accessToken' });
+
+    // Decode JWT Payload (the middle part of the token)
+    const parts = token.split('.');
+    if (parts.length !== 3) return res.json({ valid: false, message: 'Malformed accessToken format' });
+
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+
+    // Validate Expiration
+    const currentUnixTime = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp < currentUnixTime) {
+      return res.json({ valid: false, message: 'Session Token has expired' });
+    }
+
+    // Extract secure data directly from the token
+    const email = payload['https://api.openai.com/profile']?.email || parsed.user?.email || 'Unknown';
+    const plan = payload['https://api.openai.com/auth']?.chatgpt_plan_type || parsed.account?.planType || 'Unknown Plan';
+
+    return res.json({ 
+      valid: true, 
+      email: email, 
+      plan: plan.toUpperCase() 
+    });
+
+  } catch (error) {
+    console.error('JWT Decode Error:', error);
+    return res.json({ valid: false, message: 'Failed to process token data' });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 404 catch-all
 // ─────────────────────────────────────────────────────────────────────────────
 app.use((req, res) => res.status(404).json({ error: `Backend Route NOT FOUND: ${req.method} ${req.url}` }));
+
+app.use((err, req, res, next) => {
+  console.error('Global Server Error:', err);
+  res.status(500).json({ error: 'Internal Server Error', details: err.message });
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Start server — MUST bind 0.0.0.0 for Railway's reverse proxy to reach it
