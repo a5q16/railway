@@ -41,10 +41,11 @@ require('dotenv').config();
 
 // ─── App & Supabase initialization ───────────────────────────────────────────
 const app = express();
-app.use(cors({ origin: '*' }));
+app.use(cors({ origin: '*', methods: 'GET,HEAD,PUT,PATCH,POST,DELETE' }));
 app.use(express.json({ limit: '50mb' }));
 
-app.get('/api/ping', (req, res) => res.json({ status: 'Backend is alive' }));
+app.get('/', (req, res) => res.status(200).send('Railway Health Check OK'));
+app.get('/api/ping', (req, res) => res.status(200).json({ status: 'Alive' }));
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -611,10 +612,5 @@ app.use((err, req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Start server — MUST bind 0.0.0.0 for Railway's reverse proxy to reach it
 // ─────────────────────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, '0.0.0.0', () => {
-  log('INFO', `PlatiMarket activation server listening on 0.0.0.0:${PORT}`);
-  log('INFO', `Supabase URL : ${process.env.SUPABASE_URL}`);
-  log('INFO', `Digiseller ID: ${process.env.DIGISELLER_SELLER_ID}`);
-});
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, '0.0.0.0', () => console.log(`Listening on 0.0.0.0:${PORT}`));
