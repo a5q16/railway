@@ -44,7 +44,7 @@ app.post('/api/check-auth', (req, res) => {
         }
 
         const email = payload['https://api.openai.com/profile']?.email || parsed.user?.email || 'Unknown';
-        const plan = payload['https://api.openai.com/auth']?.chatgpt_plan_type || parsed.account?.planType || 'Unknown';
+        const plan = parsed.account?.planType || payload['https://api.openai.com/auth']?.chatgpt_plan_type || 'Unknown';
 
         const name = parsed.user?.name || 'Unknown';
         const picture = parsed.user?.picture || '';
