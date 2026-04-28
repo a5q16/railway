@@ -42,6 +42,7 @@ require('dotenv').config();
 // ─── App & Supabase initialization ───────────────────────────────────────────
 const app = express();
 app.use(cors({ origin: '*' }));
+app.use(express.json({ limit: '50mb' }));
 
 app.get('/api/ping', (req, res) => res.json({ status: 'Backend is alive' }));
 
@@ -50,9 +51,6 @@ const supabase = createClient(
   process.env.SUPABASE_SECRET_KEY,
   { auth: { persistSession: false } }
 );
-
-// ─── Middleware ───────────────────────────────────────────────────────────────
-app.use(express.json({ limit: '50mb' }));
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
