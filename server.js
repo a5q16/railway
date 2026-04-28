@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
 
 const app = express();
 
@@ -13,7 +14,7 @@ app.get('/', (req, res) => res.status(200).send('Railway Health Check OK'));
 app.get('/api/ping', (req, res) => res.status(200).json({ status: 'Alive' }));
 
 // 3. Auth Check Route (Pure Local JWT Decode)
-app.post('/api/check-auth', (req, res) => {
+app.post('/api/check-auth', async (req, res) => {
     try {
         const { authJson } = req.body;
         if (!authJson) return res.json({ valid: false, message: 'No JSON provided' });
@@ -28,24 +29,27 @@ app.post('/api/check-auth', (req, res) => {
         const token = parsed.accessToken;
         if (!token) return res.json({ valid: false, message: 'Missing accessToken' });
 
-        const jwtRegex = /^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$/;
-        if (!jwtRegex.test(token)) {
-            return res.json({ valid: false, message: 'Tampered Token: Signature or structure is corrupted.' });
+        // REAL VERIFICATION: Hit OpenAI's official API to prove the token is alive and untampered
+        try {
+            await axios.get('https://api.openai.com/v1/models', {
+                headers: { 'Authorization': `Bearer ${token}` },
+                timeout: 8000
+            });
+        } catch (apiError) {
+            // If OpenAI rejects it, it's either tampered, incomplete, or expired.
+            return res.json({ valid: false, message: 'Token rejected by OpenAI. It is either incomplete, tampered, or expired.' });
         }
 
+        // If we reach here, OpenAI accepted the token. It is 100% valid and untampered.
+        // Now we can safely decode the payload for display purposes.
         const parts = token.split('.');
-        if (parts.length !== 3) return res.json({ valid: false, message: 'Invalid token format' });
-
         const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-        const currentUnixTime = Math.floor(Date.now() / 1000);
-
-        if (payload.exp && payload.exp < currentUnixTime) {
-            return res.json({ valid: false, message: 'Session Token has expired' });
-        }
-
+        
         const email = payload['https://api.openai.com/profile']?.email || parsed.user?.email || 'Unknown';
-        const plan = parsed.account?.planType || payload['https://api.openai.com/auth']?.chatgpt_plan_type || 'Unknown';
-
+        // Show both what the JWT says and what the wrapper claims, so the admin has full context.
+        const jwtPlan = payload['https://api.openai.com/auth']?.chatgpt_plan_type || 'Unknown';
+        const wrapperPlan = parsed.account?.planType || 'Unknown';
+        
         const name = parsed.user?.name || 'Unknown';
         const picture = parsed.user?.picture || '';
         const userId = parsed.user?.id || 'N/A';
@@ -54,7 +58,7 @@ app.post('/api/check-auth', (req, res) => {
         return res.json({ 
             valid: true, 
             email: email, 
-            plan: plan.toUpperCase(),
+            plan: `${wrapperPlan.toUpperCase()} (JWT: ${jwtPlan})`,
             name: name,
             picture: picture,
             userId: userId,
@@ -62,8 +66,8 @@ app.post('/api/check-auth', (req, res) => {
         });
 
     } catch (error) {
-        console.error('JWT Processing Error:', error);
-        return res.json({ valid: false, message: 'Failed to process token data' });
+        console.error('Server Error:', error.message);
+        return res.json({ valid: false, message: 'Internal server error during validation.' });
     }
 });
 
