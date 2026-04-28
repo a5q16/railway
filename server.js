@@ -45,8 +45,8 @@ app.post('/api/check-auth', (req, res) => {
         }
 
         const email = payload['https://api.openai.com/profile']?.email || parsed.user?.email || 'Unknown';
-        const jwtPlan = payload['https://api.openai.com/auth']?.chatgpt_plan_type || 'Unknown';
-        const wrapperPlan = parsed.account?.planType || 'Unknown';
+        // ONLY trust the cryptographically secure JWT payload for the plan
+        const realPlan = payload['https://api.openai.com/auth']?.chatgpt_plan_type || 'FREE';
 
         const name = parsed.user?.name || 'Unknown';
         const picture = parsed.user?.picture || '';
@@ -56,7 +56,7 @@ app.post('/api/check-auth', (req, res) => {
         return res.json({ 
             valid: true, 
             email: email, 
-            plan: `${wrapperPlan.toUpperCase()} (JWT: ${jwtPlan.toUpperCase()})`,
+            plan: realPlan.toUpperCase(),
             name: name,
             picture: picture,
             userId: userId,
