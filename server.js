@@ -28,6 +28,11 @@ app.post('/api/check-auth', (req, res) => {
         const token = parsed.accessToken;
         if (!token) return res.json({ valid: false, message: 'Missing accessToken' });
 
+        const jwtRegex = /^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$/;
+        if (!jwtRegex.test(token)) {
+            return res.json({ valid: false, message: 'Tampered Token: Signature or structure is corrupted.' });
+        }
+
         const parts = token.split('.');
         if (parts.length !== 3) return res.json({ valid: false, message: 'Invalid token format' });
 
@@ -41,7 +46,20 @@ app.post('/api/check-auth', (req, res) => {
         const email = payload['https://api.openai.com/profile']?.email || parsed.user?.email || 'Unknown';
         const plan = payload['https://api.openai.com/auth']?.chatgpt_plan_type || parsed.account?.planType || 'Unknown';
 
-        return res.json({ valid: true, email: email, plan: plan.toUpperCase() });
+        const name = parsed.user?.name || 'Unknown';
+        const picture = parsed.user?.picture || '';
+        const userId = parsed.user?.id || 'N/A';
+        const expires = payload.exp ? new Date(payload.exp * 1000).toLocaleString() : 'Unknown';
+
+        return res.json({ 
+            valid: true, 
+            email: email, 
+            plan: plan.toUpperCase(),
+            name: name,
+            picture: picture,
+            userId: userId,
+            expires: expires
+        });
 
     } catch (error) {
         console.error('JWT Processing Error:', error);
