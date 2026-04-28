@@ -45,8 +45,8 @@ app.post('/api/check-auth', (req, res) => {
         }
 
         const email = payload['https://api.openai.com/profile']?.email || parsed.user?.email || 'Unknown';
-        // ONLY trust the cryptographically secure JWT payload for the plan
-        const realPlan = payload['https://api.openai.com/auth']?.chatgpt_plan_type || 'FREE';
+        // We must trust the outer wrapper for the plan name because OpenAI's JWT doesn't always reflect workspace upgrades.
+        const displayPlan = parsed.account?.planType || payload['https://api.openai.com/auth']?.chatgpt_plan_type || 'UNKNOWN';
 
         const name = parsed.user?.name || 'Unknown';
         const picture = parsed.user?.picture || '';
@@ -56,7 +56,7 @@ app.post('/api/check-auth', (req, res) => {
         return res.json({ 
             valid: true, 
             email: email, 
-            plan: realPlan.toUpperCase(),
+            plan: displayPlan.toUpperCase(),
             name: name,
             picture: picture,
             userId: userId,
